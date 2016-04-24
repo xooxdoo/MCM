@@ -19,14 +19,33 @@ KeyWords              'namespace'|'import'|'action'|'each'|'to'|'on'|'if'|'where
 %%
 
 Root
-  : Namespace Instructions EOF
-    { return [':ROOT:', $1, $2] }
+  : Imports Namespace Instructions EOF
+    { return {type:'ROOT', imports: $1, namespace:$2, body:$3 } }
   ;
 
 Namespace
   : namespace IDENTIFIER ';'
-    -> [":NS:", $2]
+    -> { type:'Namespace', namespace:$2 }
   |
+  ;
+
+Imports
+  : Imports Import
+    -> ($1.push($2), $1)
+  |
+    -> []
+  ;
+
+Import
+  : import QualifiedName ';'
+    -> { type:'Import', qualifiedName:$2 }
+  ;
+
+QualifiedName
+  : IDENTIFIER
+    -> [$1]
+  | QualifiedName '.' IDENTIFIER
+    -> ($1.push($3), $1)
   ;
 
 Instructions
@@ -43,7 +62,9 @@ Instruction
 
 Statements
   : Statements Statement
-  | 
+    -> ($1.push($2), $1)
+  |
+    -> []
   ;
 
 Statement
@@ -52,40 +73,49 @@ Statement
 
 ExpressionStatement
   : Expression ';'
-    -> [":ExprSt:", $1]
+    -> { type: "ExpressionStatement", expression: $1 }
   ;
 
 Expression
   : IDENTIFIER
+    -> { type: "IdentifierExpression", identifier: $1 }
   | Expression '.' IDENTIFIER
-    -> [":ExprAccess:", $1, $3]
+    -> { type: "AccessExpression", expression: $1, identifier: $3 }
   | Expression '(' ExpressionList ')'
-    -> [":ExprCall:", $1, $3]
-  | Expression '[' Expression ']'
-    -> [":ExprIndex:", $1, $3]
+    -> { type: "CallExpression", expression: $1, arguments: $3 }
+  | Expression '[' ExpressionList ']'
+    -> { type: "IndexExpression", expression: $1, indexes: $3 }
   | '[' ExpressionList ']'
-    -> [":List:", $2]
+    -> { type: "List", content: $2 }
   ;
 
 ExpressionList 
-  : ExpressionList ',' Expression
-    -> ($1.push($3), $1)
-  | Expression
-    -> [$1]
+  : FilledExpressionList
   |
     -> []
   ;
 
+FilledExpressionList
+  : FilledExpressionList ',' Expression
+    -> ($1.push($3), $1)
+  | Expression
+    -> [$1]
+  ;
+
 Action
   : action IDENTIFIER '(' ParamsList ')' '{' Statements '}'
-    -> [":ActionDecl:", $2, $4, $7]
+    -> { type: "ActionDeclaration", identifier: $2, params: $4, body: $7 }
   ;
 
 ParamsList
-  : ParamsList ',' IDENTIFIER IDENTIFIER
-    -> ($1.push([":Param:", $3, $4]), $1)
-  | IDENTIFIER IDENTIFIER
-    -> [":Param:", $1, $2]
+  : FilledParmsList
   | 
     -> []
+  ;
+
+FilledParmsList
+  : FilledParmsList ',' IDENTIFIER IDENTIFIER
+    -> ($1.push({ type: "Param", predicate: $3, identifier: $4 }), $1)
+  | IDENTIFIER IDENTIFIER
+    -> [{ type: "Param", predicate: $1, identifier: $2 }]
   ;
